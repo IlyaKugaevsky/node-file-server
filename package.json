@@ -4,5 +4,8 @@
   "description": "demo project",
   "main": "index.js",
   "author": "Ilya Kugaevsky",
-  "license": "MIT"
+  "license": "MIT",
+  "scripts": {
+    "start": "node index.js"
+  }
 }

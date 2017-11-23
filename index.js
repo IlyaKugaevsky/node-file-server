@@ -30,12 +30,14 @@
 
 'use strict';
 
-let url = require('url');
-let fs = require('fs');
+const url = require('url');
+const fs = require('fs');
+const getFile = require('./api/fileApi');
 
 require('http').createServer(function(req, res) {
 
   let pathname = decodeURI(url.parse(req.url).pathname);
+  getFile(pathname, res);
 
   switch(req.method) {
   case 'GET':
@@ -49,9 +51,11 @@ require('http').createServer(function(req, res) {
       return;
     }
 
-  default:
-    res.statusCode = 502;
-    res.end("Not implemented");
-  }
+  // default:
+  //   res.statusCode = 502;
+  //   res.end("Not implemented");
+   }
 
 }).listen(3000);
+
+console.log('server is running on port 3000');
