@@ -9,6 +9,32 @@ getFile = (pathname, res) => {
   let file = new fs.ReadStream(fullPath);
 
   file.pipe(res);
+
+  file.on('error', (err) => {
+    if (err.code === 'ENOENT') {
+      res.statusCode = 404;
+      res.end('File not found');  
+    }
+    else {
+      res.statusCode = 500;
+      res.end('Internal error');
+    }
+    console.log(err);
+  })
+
+  file
+    .on('open', () => {
+      console.log('open');
+    })
+    .on('close', () => {
+      console.log('close');
+    })
+
+  res.on('close', () => {
+    file.destroy();
+  })
 }
+
+
 
 module.exports = getFile;
