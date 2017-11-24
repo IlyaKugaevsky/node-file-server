@@ -30,31 +30,19 @@
 
 'use strict';
 
-const url = require('url');
-const fs = require('fs');
-const getFile = require('./api/fileApi');
+const getFile = require('./api/fileApi').getFile;
+const postFile = require('./api/fileApi').postFile;
 
 require('http').createServer(function(req, res) {
 
-  let pathname = decodeURI(url.parse(req.url).pathname);
-  getFile(pathname, res);
-
   switch(req.method) {
-  case 'GET':
-    if (pathname == '/') {
-      // отдачу файлов следует переделать "правильно", через потоки, с нормальной обработкой ошибок
-      fs.readFile(__dirname + '/public/index.html', (err, content) => {
-        if (err) throw err;
-        res.setHeader('Content-Type', 'text/html;charset=utf-8');
-        res.end(content);
-      });
-      return;
-    }
-
-  // default:
-  //   res.statusCode = 502;
-  //   res.end("Not implemented");
-   }
+    case 'GET':
+      getFile(req, res);
+      break;
+    case 'POST':
+      postFile(req, res);
+      break;
+  }
 
 }).listen(3000);
 
