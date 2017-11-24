@@ -5,7 +5,6 @@ const path = require("path");
 const root = path.dirname(require.main.filename);
 
 getFile = (req, res) => {
-
   let fullPath = createPath(req);
   let file = new fs.ReadStream(fullPath);
   file.pipe(res);
@@ -44,11 +43,11 @@ postFile = (req, res) => {
       req.pipe(file);
       res.end("File has been uploaded");
 
-      file.on(error, (err) => {
+      file.on("error", err => {
         console.log(err);
         res.end("Internal error");
         res.statusCode = 500;
-      })
+      });
 
       res.on("close", () => {
         file.destroy();
@@ -58,8 +57,17 @@ postFile = (req, res) => {
 };
 
 deleteFile = (req, res) => {
-  
-}
+  let fullPath = createPath(req);
+
+  if (!fs.existsSync(fullPath)) {
+    res.end("File not found");
+    res.statusCode = 404;
+  } else {
+    console.log("wanna some delete");
+    fs.unlinkSync(fullPath);
+    res.end("File has been removed");
+  }
+};
 
 createPath = req => {
   let pathname = decodeURI(url.parse(req.url).pathname);
@@ -68,3 +76,4 @@ createPath = req => {
 
 module.exports.getFile = getFile;
 module.exports.postFile = postFile;
+module.exports.deleteFile = deleteFile;

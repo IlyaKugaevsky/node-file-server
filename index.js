@@ -28,22 +28,29 @@
 
 // Пример простого сервера в качестве основы
 
-'use strict';
+"use strict";
 
-const getFile = require('./api/fileApi').getFile;
-const postFile = require('./api/fileApi').postFile;
+const getFile = require("./api/fileApi").getFile;
+const postFile = require("./api/fileApi").postFile;
+const deleteFile = require("./api/fileApi").deleteFile;
 
-require('http').createServer(function(req, res) {
+require("http")
+  .createServer(function(req, res) {
+    switch (req.method) {
+      case "GET":
+        getFile(req, res);
+        break;
+      case "POST":
+        postFile(req, res);
+        break;
+      case "DELETE":
+        deleteFile(req, res);
+        break;
+      default:
+        res.end("No action specified");
+        break;
+    }
+  })
+  .listen(3000);
 
-  switch(req.method) {
-    case 'GET':
-      getFile(req, res);
-      break;
-    case 'POST':
-      postFile(req, res);
-      break;
-  }
-
-}).listen(3000);
-
-console.log('server is running on port 3000');
+console.log("server is running on port 3000");
