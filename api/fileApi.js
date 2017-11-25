@@ -6,43 +6,20 @@ const config = require("../config/default");
 
 module.exports.getFile = (req, res) => {
 
-  const filename = getFilename(req);
-  const fullPath = createFullPath(req);
+  const filename = getFilename(req.url);
+  const fullPath = createFullPath(req.url);
 
-  switch (filename) {
-    case "": 
-      sendFile(config.indexPath, res);
-      break;
-    case "favicon.ico":
-      sendFile(config.indexPath, res);
-      break;
-    default: 
-      if (!isValidFilename(filename)) {
-        res.statusCode = 400;
-        res.end("Nested paths are not allowed");
-      } else {
-        sendFile(fullPath, res);
-      }
-      break;
+  if (filename === "") {
+    sendFile(config.indexPath, res);
+    return;
   }
+  if (!isValidFilename(filename)) {
+    res.statusCode = 400;
+    res.end("Nested paths are not allowed");
+    return;
+  }
+  sendFile(fullPath, res);
 
-  // if (filename === "") {
-  //   sendFile(config.indexPath, res);
-  //   return;
-  // }
-
-  // if (filename === "favicon.ico") {
-  //   sendFile(config.faviconPath, res);
-  //   return;
-  // }
-  
-  // if (!isValidFilename(filename)) {
-  //   res.statusCode = 400;
-  //   res.end("Nested paths are not allowed");
-  //   return;
-  // }
-
-  // sendFile(fullPath, res);
 };
 
 module.exports.postFile = (req, res) => {
@@ -58,7 +35,7 @@ module.exports.postFile = (req, res) => {
 
 module.exports.deleteFile = (req, res) => {
 
-  const fullPath = createFullPath(req);
+  const fullPath = createFullPath(req.url);
   fs.unlink(fullPath, (err) => {
     if (err) {
       if (err.code == "ENOENT") {
@@ -106,7 +83,7 @@ const sendFile = (fullPath, res) => {
 
 const receiveFile = (req, res, fileSizeLimit) => {
 
-  const fullPath = createFullPath(req);
+  const fullPath = createFullPath(req.url);
   const file = new fs.WriteStream(fullPath, { flags: "wx" });
 
   req.pipe(file);
@@ -155,8 +132,9 @@ const receiveFile = (req, res, fileSizeLimit) => {
     //   finish -> error
 
     // we must use 'close' event to track if the file has really been written down
-    res.end('OK');
+    res.end('File has been uploaded');
   });
+
 };
 
 const destroyFile = (file, fullPath) => {
@@ -167,13 +145,13 @@ const destroyFile = (file, fullPath) => {
 }
 
 const isValidFilename = filename =>
-  !filename.includes("/") && !filename.includes("..");
+  !filename.includes("/") && !filename.includes("..") && !filename === "";
 
-const createFullPath = req =>
-  path.join(config.filesRoot, getFilename(req));
+const createFullPath = reqUrl =>
+  path.join(config.filesRoot, getFilename(reqUrl));
 
-const getFilename = req => 
-  getPath(req).slice(1);
+const getFilename = reqUrl => 
+  getPath(reqUrl).slice(1);
 
-const getPath = req => 
-  decodeURI(url.parse(req.url).pathname);
+const getPath = reqUrl => 
+  decodeURI(url.parse(reqUrl).pathname);

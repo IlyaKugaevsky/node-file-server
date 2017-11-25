@@ -6,17 +6,19 @@
   "author": "Ilya Kugaevsky",
   "license": "MIT",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "mocha"
   },
   "dependencies": {
-    "mime": "^1.5.0",
-    "mocha": "^4.0.1"
+    "mime": "^1.5.0"
   },
   "devDependencies": {
-    "eslint": "^4.11.0",
-    "linter": "^0.0.7",
     "dotenv": "^4.0.0",
+    "eslint": "^4.11.0",
     "eslint-config-prettier": "^2.3.0",
-    "prettier": "^1.5.3"
+    "linter": "^0.0.7",
+    "mocha": "^4.0.1",
+    "prettier": "^1.5.3",
+    "rewire": "^3.0.2"
   }
 }
