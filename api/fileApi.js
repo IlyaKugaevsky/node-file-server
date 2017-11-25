@@ -1,23 +1,102 @@
 const url = require("url");
 const fs = require("fs");
 const path = require("path");
+const mime = require("mime");
+const config = require("../config/default");
 
-const root = path.dirname(require.main.filename);
+module.exports.getFile = (req, res) => {
 
-getFile = (req, res) => {
-  let fullPath = createPath(req);
-  let file = new fs.ReadStream(fullPath);
+  const filename = getFilename(req);
+  const fullPath = createFullPath(req);
+
+  switch (filename) {
+    case "": 
+      sendFile(config.indexPath, res);
+      break;
+    case "favicon.ico":
+      sendFile(config.indexPath, res);
+      break;
+    default: 
+      if (!isValidFilename(filename)) {
+        res.statusCode = 400;
+        res.end("Nested paths are not allowed");
+      } else {
+        sendFile(fullPath, res);
+      }
+      break;
+  }
+
+  // if (filename === "") {
+  //   sendFile(config.indexPath, res);
+  //   return;
+  // }
+
+  // if (filename === "favicon.ico") {
+  //   sendFile(config.faviconPath, res);
+  //   return;
+  // }
+  
+  // if (!isValidFilename(filename)) {
+  //   res.statusCode = 400;
+  //   res.end("Nested paths are not allowed");
+  //   return;
+  // }
+
+  // sendFile(fullPath, res);
+};
+
+module.exports.postFile = (req, res) => {
+
+  if (req.headers["content-length"] > config.fileSizeLimit) {
+    res.statusCode = 413;
+    res.end(`File size should be less than ${config.fileSizeLimit / 1e6} Mb`);
+    return;
+  }
+  receiveFile(req, res, config.fileSizeLimit);
+
+};
+
+module.exports.deleteFile = (req, res) => {
+
+  const fullPath = createFullPath(req);
+  fs.unlink(fullPath, (err) => {
+    if (err) {
+      if (err.code == "ENOENT") {
+        res.statusCode = 404;
+        res.end("File not found");
+      }
+      else {
+        console.log(err);
+        res.statusCode = 500;
+        res.end("Internal error");
+      }
+    }
+    else {
+      res.statusCode = 200;
+      res.end("File has been removed");
+    }
+  })
+  
+};
+
+const sendFile = (fullPath, res) => {
+  
+  const file = new fs.ReadStream(fullPath);
   file.pipe(res);
 
   file.on("error", err => {
     if (err.code === "ENOENT") {
-      res.end("File not found");
       res.statusCode = 404;
+      res.end("File not found");
     } else {
-      res.end("Internal error");
       res.statusCode = 500;
+      res.end("Internal error");
     }
     console.log(err);
+  });
+
+  file.on("open", () => {
+    res.setHeader("Content-Type", mime.lookup(fullPath));
   });
 
   res.on("close", () => {
@@ -25,55 +104,76 @@ getFile = (req, res) => {
   });
 };
 
-postFile = (req, res) => {
-  const fileSizeLimit = 1000000;
+const receiveFile = (req, res, fileSizeLimit) => {
 
-  if (req.headers["content-length"] > fileSizeLimit) {
-    res.end("File size should be less than 1Mb");
-    res.statusCode = 413;
-  } else {
-    let fullPath = createPath(req);
+  const fullPath = createFullPath(req);
+  const file = new fs.WriteStream(fullPath, { flags: "wx" });
 
-    if (fs.existsSync(fullPath)) {
-      res.end("File already exists");
+  req.pipe(file);
+
+  let size = 0;
+  req.on("data", chunk => {
+    size += chunk.length;
+    if (size > fileSizeLimit) {
+      // early connection close before recieving the full request
+      res.statusCode = 413;
+
+      // if we just res.end w/o connection close, browser may keep on sending the file
+      // the connection will be kept alive, and the browser will hang (trying to send more data)
+      // this header tells node to close the connection
+      // also see http://stackoverflow.com/questions/18367824/how-to-cancel-http-upload-from-data-events/18370751#18370751
+      res.setHeader('Connection', 'close');
+
+      // Some browsers will handle this as 'CONNECTION RESET' error
+      res.end(`File size should be less than ${config.fileSizeLimit / 10e6} Mb`);
+      destroyFile(file, fullPath);
+    }
+  });
+
+  req.on("close", () => destroyFile(file, fullPath));
+
+  file.on("error", err => {
+    if (err.code === 'EEXIST') {
       res.statusCode = 409;
+      res.end('File is already exists');
     } else {
-      let file = new fs.WriteStream(fullPath);
-
-      req.pipe(file);
-      res.end("File has been uploaded");
-
-      file.on("error", err => {
-        console.log(err);
-        res.end("Internal error");
-        res.statusCode = 500;
-      });
-
-      res.on("close", () => {
-        file.destroy();
+      res.writeHead(500, {'Connection': 'close'});
+      res.write('Internal error');
+      fs.unlink(fullPath, err => { // eslint-disable-line
+        res.end();
       });
     }
-  }
+    console.error(err);
+  });
+
+  file.on('close', () => {
+    // Note: can't use on('finish')
+    // finish = data flushed, for zero files happens immediately,
+    // even before 'file exists' check
+
+    // for zero files the event sequence may be:
+    //   finish -> error
+
+    // we must use 'close' event to track if the file has really been written down
+    res.end('OK');
+  });
 };
 
-deleteFile = (req, res) => {
-  let fullPath = createPath(req);
+const destroyFile = (file, fullPath) => {
+  file.destroy();
+  fs.unlink(fullPath, err => { // eslint-disable-line
+    /* ignore error */
+  });
+}
 
-  if (!fs.existsSync(fullPath)) {
-    res.end("File not found");
-    res.statusCode = 404;
-  } else {
-    console.log("wanna some delete");
-    fs.unlinkSync(fullPath);
-    res.end("File has been removed");
-  }
-};
+const isValidFilename = filename =>
+  !filename.includes("/") && !filename.includes("..");
 
-createPath = req => {
-  let pathname = decodeURI(url.parse(req.url).pathname);
-  return path.join(root, "/files", pathname.substring(1));
-};
+const createFullPath = req =>
+  path.join(config.filesRoot, getFilename(req));
 
-module.exports.getFile = getFile;
-module.exports.postFile = postFile;
-module.exports.deleteFile = deleteFile;
+const getFilename = req => 
+  getPath(req).slice(1);
+
+const getPath = req => 
+  decodeURI(url.parse(req.url).pathname);
