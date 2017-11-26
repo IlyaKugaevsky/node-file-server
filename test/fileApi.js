@@ -22,17 +22,17 @@ describe("isValidFileName", function() {
   
   const isValidFilename = fileApi.__get__("isValidFilename");
 
-  it("Shouldn't include '/' ", function() {
+  it("Should not include any '/' ", function() {
     const filename = "x/y";
     assert.isFalse(isValidFilename(filename));
   });
 
-  it("Shouldn't include '..' ", function() {
+  it("Should not include any '..' ", function() {
     const filename = "x..y";
     assert.isFalse(isValidFilename(filename));
   });
 
-  it("Shouldn't be empty", function() {
+  it("Should not be empty", function() {
     const filename = "";
     assert.isFalse(isValidFilename(filename));
   });
