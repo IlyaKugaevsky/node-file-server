@@ -6,14 +6,13 @@ const path = require("path");
 const config = require("../config/default");
 const server = require("../server");
 
-
 describe("Server tests", function() {
   let app;
 
   const smallFileName = "small.test";
   const bigFileName = "big.test";
-  const smallFileTempPath = path.join(config.testPath, "temp/", smallFileName);
-  const bigFileTempPath = path.join(config.testPath, "temp/", bigFileName);
+  const smallFileTempPath = path.join(config.testRoot, "temp/", smallFileName);
+  const bigFileTempPath = path.join(config.testRoot, "temp/", bigFileName);
   const smallFileSize = Math.min(10, config.fileSizeLimit);
   const bigFileSize = config.fileSizeLimit + 1;
   const smallFileServerPath = path.join(config.filesRoot, smallFileName);
@@ -169,7 +168,51 @@ describe("Server tests", function() {
         })
       );
     });
-      
+  });
+
+  describe("DELETE tests", function() {
+    it("Should delete if file exists", function(done) {
+      copyTestFile(smallFileTempPath, smallFileServerPath);
+
+      const reqOptions = {
+        url: "http://localhost:3000/" + smallFileName,
+        method: "DELETE"
+      };
+
+      request(reqOptions, function(error, response) {
+        if (error) return done(error);
+
+        const expectedCode = 200;
+        assert.equal(response.statusCode, expectedCode);
+        const stillExists = fs.existsSync(smallFileServerPath);
+
+        assert.isFalse(stillExists);
+
+        if (stillExists) {
+          fs.unlinkSync(smallFileServerPath);
+        }
+
+        done();
+      });
+    });
+
+    it("Should return 404 if file doesn't exist", function(done) {
+      const reqOptions = {
+        url: "http://localhost:3000/" + smallFileName,
+        method: "DELETE"
+      };
+
+      request(reqOptions, function(error, response) {
+        if (error) return done(error);
+
+        const exists = fs.existsSync(smallFileServerPath);
+        const expectedCode = 404;
+        assert.isFalse(exists);
+        assert.equal(response.statusCode, expectedCode);
+
+        done();
+      });
+    });
   });
 });
 
