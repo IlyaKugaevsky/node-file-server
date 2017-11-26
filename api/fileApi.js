@@ -9,8 +9,14 @@ module.exports.getFile = (req, res) => {
   const filename = getFilename(req.url);
   const fullPath = createFullPath(req.url);
 
+  console.log(filename);
+
   if (filename === "") {
     sendFile(config.indexPath, res);
+    return;
+  }
+  if (filename === "favicon.ico") {
+    sendFile(config.faviconPath, res);
     return;
   }
   if (!isValidFilename(filename)) {
@@ -145,7 +151,7 @@ const destroyFile = (file, fullPath) => {
 }
 
 const isValidFilename = filename =>
-  (!filename.includes("/") && !filename.includes("..") && !filename === "");
+  (!filename.includes("/") && !filename.includes("..") && filename.length !== 0);
 
 const createFullPath = reqUrl =>
   path.join(config.filesRoot, getFilename(reqUrl));

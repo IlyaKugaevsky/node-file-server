@@ -18,23 +18,43 @@ describe("getPath", function() {
 
 });
 
+describe("getFilename", function() {
+  
+  const getFilename = fileApi.__get__("getFilename");
+
+  it("Should return filename correctly", function() {
+    const inputUrl = "http://www.abc.com/something.xyz";
+    const expectedFilename = "something.xyz";
+
+    const filename = getFilename(inputUrl);
+
+    assert.equal(filename, expectedFilename);
+  });
+
+});
+
 describe("isValidFileName", function() {
   
   const isValidFilename = fileApi.__get__("isValidFilename");
 
-  it("Should not include any '/' ", function() {
+  it("Should not pass any '/' ", function() {
     const filename = "x/y";
     assert.isFalse(isValidFilename(filename));
   });
 
-  it("Should not include any '..' ", function() {
+  it("Should not pass any '..' ", function() {
     const filename = "x..y";
     assert.isFalse(isValidFilename(filename));
   });
 
-  it("Should not be empty", function() {
+  it("Should not pass empty string", function() {
     const filename = "";
     assert.isFalse(isValidFilename(filename));
+  });
+
+  it("Should pass valid filenames", function() {
+    const filename = "blablabla.test";
+    assert.isTrue(isValidFilename(filename));
   });
 
 });
