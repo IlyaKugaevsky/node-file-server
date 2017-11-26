@@ -6,6 +6,7 @@ const path = require("path");
 const config = require("../config/default");
 const server = require("../server");
 
+
 describe("Server tests", function() {
   let app;
 
@@ -13,8 +14,9 @@ describe("Server tests", function() {
   const bigFileName = "big.test";
   const smallFileTempPath = path.join(config.testPath, "temp/", smallFileName);
   const bigFileTempPath = path.join(config.testPath, "temp/", bigFileName);
-  const smallFileSize = config.fileSizeLimit / 2;
-  const bigFileSize = config.fileSizeLimit * 2;
+  const smallFileSize = Math.min(10, config.fileSizeLimit);
+  const bigFileSize = config.fileSizeLimit + 1;
+  const smallFileServerPath = path.join(config.filesRoot, smallFileName);
 
   before(function(done) {
     app = server.listen(3000, done);
@@ -33,8 +35,6 @@ describe("Server tests", function() {
   });
 
   describe("GET tests", function() {
-    const smallFileServerPath = path.join(config.filesRoot, smallFileName);
-
     before(function() {
       copyTestFile(smallFileTempPath, smallFileServerPath);
     });
@@ -104,13 +104,13 @@ describe("Server tests", function() {
   });
 
   describe("POST tests", function() {
-    const reqOptions = {
-      url: "http://localhost:3000/" + bigFileName,
-      method: "POST"
-    };
-
     it("Should not upload big file", function(done) {
       const bigFile = new fs.ReadStream(bigFileTempPath);
+
+      const reqOptions = {
+        url: "http://localhost:3000/" + bigFileName,
+        method: "POST"
+      };
 
       bigFile.pipe(
         request(reqOptions, function(error, response) {
@@ -123,6 +123,53 @@ describe("Server tests", function() {
         })
       );
     });
+
+    it("Should upload small file correctly", function(done) {
+      const smallFile = fs.readFileSync(smallFileTempPath);
+      const fileStream = new fs.ReadStream(smallFileTempPath);
+
+      const reqOptions = {
+        url: "http://localhost:3000/" + smallFileName,
+        method: "POST"
+      };
+
+      fileStream.pipe(
+        request(reqOptions, function(error, response) {
+          if (error) return done(error);
+
+          const expectedCode = 200;
+          const uploadedFile = fs.readFileSync(smallFileServerPath);
+          assert.equal(response.statusCode, expectedCode);
+          assert.equal(uploadedFile.toString(), smallFile.toString());
+
+          fs.unlinkSync(smallFileServerPath);
+          done();
+        })
+      );
+    });
+
+    it("Should detect if file is already exists", function(done) {
+      copyTestFile(smallFileTempPath, smallFileServerPath);
+      const fileStream = new fs.ReadStream(smallFileTempPath);
+
+      const reqOptions = {
+        url: "http://localhost:3000/" + smallFileName,
+        method: "POST"
+      };
+
+      fileStream.pipe(
+        request(reqOptions, function(error, response) {
+          if (error) return done(error);
+
+          const expectedCode = 409;
+          assert.equal(response.statusCode, expectedCode);
+
+          fs.unlinkSync(smallFileServerPath);
+          done();
+        })
+      );
+    });
+      
   });
 });
 
