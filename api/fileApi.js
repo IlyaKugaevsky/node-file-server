@@ -9,8 +9,6 @@ module.exports.getFile = (req, res) => {
   const filename = getFilename(req.url);
   const fullPath = createFullPath(req.url);
 
-  console.log(filename);
-
   if (filename === "") {
     sendFile(config.indexPath, res);
     return;
