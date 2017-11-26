@@ -145,7 +145,7 @@ const destroyFile = (file, fullPath) => {
 }
 
 const isValidFilename = filename =>
-  !filename.includes("/") && !filename.includes("..") && !filename === "";
+  (!filename.includes("/") && !filename.includes("..") && !filename === "");
 
 const createFullPath = reqUrl =>
   path.join(config.filesRoot, getFilename(reqUrl));
