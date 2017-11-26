@@ -9,66 +9,126 @@ const server = require("../server");
 describe("Server tests", function() {
   let app;
 
-  const smallFilePath = path.join(config.testPath, "temp/small.test");
-  const bigFilePath = path.join(config.testPath, "temp/big.test");
+  const smallFileName = "small.test";
+  const bigFileName = "big.test";
+  const smallFileTempPath = path.join(config.testPath, "temp/", smallFileName);
+  const bigFileTempPath = path.join(config.testPath, "temp/", bigFileName);
   const smallFileSize = config.fileSizeLimit / 2;
   const bigFileSize = config.fileSizeLimit * 2;
 
-  before( function(done) {
+  before(function(done) {
     app = server.listen(3000, done);
 
     if (config.fileSizeLimit > 1e7) {
       throw Error("Should not create very big test-files");
     }
-    createTestFile(smallFilePath, smallFileSize);
-    createTestFile(bigFilePath, bigFileSize);
+    createTestFile(smallFileTempPath, smallFileSize);
+    createTestFile(bigFileTempPath, bigFileSize);
   });
 
   after(function(done) {
-    deleteTestFile(smallFilePath);
-    deleteTestFile(bigFilePath);
+    deleteTestFile(smallFileTempPath);
+    deleteTestFile(bigFileTempPath);
     app.close(done);
   });
 
+  describe("GET tests", function() {
+    const smallFileServerPath = path.join(config.filesRoot, smallFileName);
 
-  it("Should return index.html", function(done) {
-    request("http://localhost:3000", function(error, response, body) {
-      if (error) return done(error);
+    before(function() {
+      copyTestFile(smallFileTempPath, smallFileServerPath);
+    });
 
-      const file = fs.readFileSync("public/index.html", { encoding: "utf-8" });
-      assert.equal(body, file);
+    after(function() {
+      deleteTestFile(smallFileServerPath);
+    });
 
-      done();
+    it("Should return index.html correctly", function(done) {
+      request("http://localhost:3000/", function(error, response, body) {
+        if (error) return done(error);
+
+        const file = fs.readFileSync("public/index.html", {
+          encoding: "utf-8"
+        });
+        assert.equal(body, file);
+
+        done();
+      });
+    });
+
+    it("Should return 404 for non-existing but valid filename", function(done) {
+      request("http://localhost:3000/blablabla.test", function(
+        error,
+        response
+      ) {
+        if (error) return done(error);
+
+        const expectedCode = 404;
+        assert.equal(expectedCode, response.statusCode);
+
+        done();
+      });
+    });
+
+    it("Should return 400 for invalid filename", function(done) {
+      request("http://localhost:3000/blablabla..test", function(
+        error,
+        response
+      ) {
+        if (error) return done(error);
+
+        const expectedCode = 400;
+        assert.equal(expectedCode, response.statusCode);
+
+        done();
+      });
+    });
+
+    it("Should return existing file correctly", function(done) {
+      request("http://localhost:3000/small.test", function(
+        error,
+        response,
+        body
+      ) {
+        if (error) return done(error);
+
+        const smallFile = fs.readFileSync(smallFileServerPath);
+        const expectedCode = 200;
+
+        assert.equal(expectedCode, response.statusCode);
+        assert.equal(body, smallFile);
+
+        done();
+      });
     });
   });
 
-  it("Should return 404 for non-existing but valid filename", function(done) {
-    request("http://localhost:3000/blablabla.test", function(error, response) {
-      if (error) return done(error);
+  describe("POST tests", function() {
+    const reqOptions = {
+      url: "http://localhost:3000/" + bigFileName,
+      method: "POST"
+    };
 
-      const expectedCode = 404;
-      assert.equal(expectedCode, response.statusCode);
+    it("Should not upload big file", function(done) {
+      const bigFile = new fs.ReadStream(bigFileTempPath);
 
-      done();
-    });
-  });
+      bigFile.pipe(
+        request(reqOptions, function(error, response) {
+          if (error) return done(error);
 
-  it("Should return 400 for invalid filename", function(done) {
-    request("http://localhost:3000/blablabla..test", function(error, response) {
-      if (error) return done(error);
+          const expectedCode = 413;
+          assert.equal(response.statusCode, expectedCode);
 
-      const expectedCode = 400;
-      assert.equal(expectedCode, response.statusCode);
-
-      done();
+          done();
+        })
+      );
     });
   });
 });
 
-const createTestFile = (path, size) => {
-  fs.writeFileSync(path, new Buffer(size));
-};
+const createTestFile = (path, size) => fs.writeFileSync(path, new Buffer(size));
 
-const deleteTestFile = path => {
-  fs.unlinkSync(path);
-};
+const deleteTestFile = path => fs.unlinkSync(path);
+
+const copyTestFile = (from, to) =>
+  fs.createReadStream(from).pipe(fs.createWriteStream(to));
