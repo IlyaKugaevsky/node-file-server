@@ -62,7 +62,7 @@ module.exports.deleteFile = (req, res) => {
 
 const sendFile = (fullPath, res) => {
   
-  const file = new fs.ReadStream(fullPath);
+  const file = fs.createReadStream(fullPath);
   file.pipe(res);
 
   file.on("error", err => {
@@ -88,7 +88,7 @@ const sendFile = (fullPath, res) => {
 const receiveFile = (req, res, fileSizeLimit) => {
 
   const fullPath = createFullPath(req.url);
-  const file = new fs.WriteStream(fullPath, { flags: "wx" });
+  const file = fs.createWriteStream(fullPath, { flags: "wx" });
 
   let size = 0;
   req.on("data", chunk => {

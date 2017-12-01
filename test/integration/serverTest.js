@@ -1,4 +1,3 @@
-//const should = require('should');
 // should(process.env.NODE_ENV).eql('test');
 
 const sendRequest = require("request-promise").defaults({
@@ -7,40 +6,21 @@ const sendRequest = require("request-promise").defaults({
   simple: false
 });
 
-const should = require("should");
+const Readable = require("stream").Readable;
 const fs = require("fs-extra");
 
 const config = require("../../config/default");
 const server = require("../../server");
-
-const request = require("request");
-const path = require("path");
-
-const smallFileName = "small.test";
-const bigFileName = "big.test";
 
 const host = "http://127.0.0.1:3000";
 
 describe("Server tests", function() {
   let app;
 
-  const smallFileTempPath = path.join(
-    config.testRoot,
-    "fixtures/",
-    smallFileName
-  );
-
-  const smallFileServesendRequestath = path.join(
-    config.filesRoot,
-    smallFileName
-  );
-
   before(function(done) {
     checkFileSizeLimit();
-
     createSmallFile();
     createBigFile();
-
     app = server.listen(3000, done);
   });
 
@@ -49,7 +29,7 @@ describe("Server tests", function() {
   });
 
   after(function(done) {
-    clearFixtures();
+    fs.emptyDirSync(`${config.testRoot}/fixtures/`);
     app.close(done);
   });
 
@@ -155,57 +135,57 @@ describe("Server tests", function() {
         response.statusCode.should.be.equal(200);
       });
 
-      
+      it("should upload zero-size file", async function() {
+        const request = sendRequest.post(`${host}/small.png`);
+        const stream = new Readable();
+
+        stream.pipe(request);
+        stream.push(null);
+
+        const response = await request;
+
+        response.statusCode.should.be.equal(200);
+        fs.statSync(`${config.filesRoot}/small.png`).size.should.equal(0);
+      });
     });
   });
 
-  describe("DELETE tests", function() {
-    it("Should delete if file exists", function(done) {
-      copyTestFile(smallFileTempPath, smallFileServesendRequestath);
+  describe("DELETE method", function() {
+    context("when file exists", function() {
+      beforeEach(function() {
+        fs.copySync(
+          `${config.testRoot}/fixtures/small.test`,
+          `${config.filesRoot}/small.test`
+        );
+      });
+      it("should delete it correctly with 200 OK", async function() {
+        const request = sendRequest.delete(`${host}/small.test`);
 
-      const reqOptions = {
-        url: "http://localhost:3000/" + smallFileName,
-        method: "DELETE"
-      };
-
-      request(reqOptions, function(error, response) {
-        if (error) return done(error);
-
-        const expectedCode = 200;
-        assert.equal(response.statusCode, expectedCode);
-        const stillExists = fs.existsSync(smallFileServesendRequestath);
-
-        assert.isFalse(stillExists);
-
-        if (stillExists) {
-          fs.unlinkSync(smallFileServesendRequestath);
+        let response;
+        try {
+          response = await request;
+        } catch (err) {
+          fs.emptyDirSync(config.filesRoot);
+          throw err;
         }
 
-        done();
+        response.statusCode.should.be.equal(200);
+        fs.existsSync(`${config.filesRoot}/small.test`).should.be.false();
       });
     });
 
-    it("Should return 404 if file doesn't exist", function(done) {
-      const reqOptions = {
-        url: "http://localhost:3000/" + smallFileName,
-        method: "DELETE"
-      };
+    context("when file doesn't exist", function() {
+      it("should return 404", async function() {
+        const request = sendRequest.delete(`${host}/blablabla.test`);
 
-      request(reqOptions, function(error, response) {
-        if (error) return done(error);
+        const response = await request;
 
-        const exists = fs.existsSync(smallFileServesendRequestath);
-        const expectedCode = 404;
-        assert.isFalse(exists);
-        assert.equal(response.statusCode, expectedCode);
-
-        done();
+        fs.readdirSync(`${config.filesRoot}`).should.be.empty();
+        response.statusCode.should.be.equal(404);
       });
     });
   });
 });
-
-//const createTestFile = (path, size) => fs.writeFileSync(path, new Buffer(size));
 
 const checkFileSizeLimit = () => {
   if (config.fileSizeLimit > 1e7)
@@ -223,11 +203,3 @@ const createBigFile = () => {
   const filePath = `${config.testRoot}/fixtures/big.test`;
   fs.writeFileSync(filePath, Buffer.alloc(fileSize));
 };
-
-const clearFixtures = () =>
-  fs.emptyDirSync(path.join(config.testRoot, "fixtures/"));
-
-const deleteTestFile = path => fs.unlinkSync(path);
-
-const copyTestFile = (from, to) =>
-  fs.createReadStream(from).pipe(fs.createWriteStream(to));
