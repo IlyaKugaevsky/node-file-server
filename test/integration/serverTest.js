@@ -1,45 +1,83 @@
-const assert = require("chai").assert;
+//const should = require('should');
+// should(process.env.NODE_ENV).eql('test');
+
+const rp = require('request-promise').defaults({
+  encoding: null,
+  resolveWithFullResponse: true
+});
+
+const should = require('should');
+const fs = require("fs-extra");
+
+const config = require("../../config/default");
+const server = require("../../server");
+
 const request = require("request");
-const fs = require("fs");
 const path = require("path");
 
-const config = require("../config/default");
-const server = require("../server");
+const smallFileName = "small.test";
+const bigFileName = "big.test";
+
+const host = "http://127.0.0.1:3000";
 
 describe("Server tests", function() {
   let app;
 
-  const smallFileName = "small.test";
-  const bigFileName = "big.test";
-  const smallFileTempPath = path.join(config.testRoot, "temp/", smallFileName);
-  const bigFileTempPath = path.join(config.testRoot, "temp/", bigFileName);
-  const smallFileSize = Math.min(10, config.fileSizeLimit);
-  const bigFileSize = config.fileSizeLimit + 1;
+  // const mochaAsync = function(fn) {
+  //   return async function (done) {
+  //     try {
+  //       await fn();
+  //       done();
+  //     } catch (err) {
+  //       done(err);
+  //     }
+  //   };
+  // };
+
+  const smallFileTempPath = path.join(config.testRoot, "fixtures/", smallFileName);
+  const bigFileTempPath = path.join(config.testRoot, "fixtures/", bigFileName);
+
   const smallFileServerPath = path.join(config.filesRoot, smallFileName);
 
   before(function(done) {
     app = server.listen(3000, done);
 
-    if (config.fileSizeLimit > 1e7) {
-      throw Error("Should not create very big test-files");
-    }
-    createTestFile(smallFileTempPath, smallFileSize);
-    createTestFile(bigFileTempPath, bigFileSize);
+    checkFileSizeLimit();
+
+    createSmallFile();
+    createBigFile();
   });
 
   after(function(done) {
-    deleteTestFile(smallFileTempPath);
-    deleteTestFile(bigFileTempPath);
     app.close(done);
+    clearFixtures();
   });
 
-  describe("GET tests", function() {
+  describe("GET method", function() {
     before(function() {
       copyTestFile(smallFileTempPath, smallFileServerPath);
     });
 
     after(function() {
       deleteTestFile(smallFileServerPath);
+    });
+
+    context("when index.html requested", function() {
+      it("should return correctly", async function() {
+        const file = fs.readFileSync("public/index.html");
+
+        const response = await rp(`${host}/`);
+
+        response.body.equals(file).should.be.true();
+        
+        
+      }); 
+    });
+
+    context("when file exists", function() {
+      beforeEach(function() {
+
+      });
     });
 
     it("Should return index.html correctly", function(done) {
@@ -113,7 +151,17 @@ describe("Server tests", function() {
 
       bigFile.pipe(
         request(reqOptions, function(error, response) {
-          if (error) return done(error);
+          
+          if (error) {
+            // see this for description https://github.com/nodejs/node/issues/947#issue-58838888
+            // there is a problem in nodejs with it
+            if (error.code === 'ECONNRESET' || error.code === 'EPIPE') {
+              fs.existsSync(config.get('filesRoot') + '/big.png').should.be.false();
+              return done();
+            } else {
+              return done(error);
+            }
+          }
 
           const expectedCode = 413;
           assert.equal(response.statusCode, expectedCode);
@@ -216,7 +264,29 @@ describe("Server tests", function() {
   });
 });
 
-const createTestFile = (path, size) => fs.writeFileSync(path, new Buffer(size));
+//const createTestFile = (path, size) => fs.writeFileSync(path, new Buffer(size));
+
+const checkFileSizeLimit = () => {
+  if (config.fileSizeLimit > 1e7) 
+    throw Error("Should not create very big test-files");
+}
+
+const createSmallFile = () => {
+  const fileSize = 1;
+  const filePath = `${config.testRoot}/fixtures/small.test`;
+  fs.writeFileSync(filePath, Buffer.alloc(fileSize));
+}
+
+const createBigFile = () => {
+  const fileSize = config.fileSizeLimit + 1;
+  const filePath = `${config.testRoot}/fixtures/big.test`;
+  fs.writeFileSync(filePath, Buffer.alloc(fileSize));
+}
+
+const clearFixtures = () => 
+  fs.emptyDirSync(path.join(config.testRoot, "fixtures/"));
+
+
 
 const deleteTestFile = path => fs.unlinkSync(path);
 

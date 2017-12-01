@@ -1,7 +1,7 @@
 const rewire = require("rewire");
 const assert = require("chai").assert;
 
-const fileApi = rewire("../api/fileApi");
+const fileApi = rewire("../../api/fileApi");
 
 describe("getPath", function() {
   
