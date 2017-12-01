@@ -1,7 +1,7 @@
 //const should = require('should');
 // should(process.env.NODE_ENV).eql('test');
 
-const rp = require("request-promise").defaults({
+const sendRequest = require("request-promise").defaults({
   encoding: null,
   resolveWithFullResponse: true,
   simple: false
@@ -29,9 +29,11 @@ describe("Server tests", function() {
     "fixtures/",
     smallFileName
   );
-  const bigFileTempPath = path.join(config.testRoot, "fixtures/", bigFileName);
 
-  const smallFileServerPath = path.join(config.filesRoot, smallFileName);
+  const smallFileServesendRequestath = path.join(
+    config.filesRoot,
+    smallFileName
+  );
 
   before(function(done) {
     checkFileSizeLimit();
@@ -52,14 +54,10 @@ describe("Server tests", function() {
   });
 
   describe("GET method", function() {
-    before(function() {
-      copyTestFile(smallFileTempPath, smallFileServerPath);
-    });
-
     context("when index.html requested", function() {
-      it("should return it correctly", async function() {
+      it("should return it correctly with 200 OK", async function() {
         const file = fs.readFileSync(`${config.publicRoot}/index.html`);
-        const response = await rp(host);
+        const response = await sendRequest(host);
 
         response.statusCode.should.be.equal(200);
         response.body.equals(file).should.be.true();
@@ -74,9 +72,9 @@ describe("Server tests", function() {
         );
       });
 
-      it("should return it correctly", async function() {
+      it("should return it correctly with 200 OK", async function() {
         const file = fs.readFileSync(`${config.filesRoot}/small.test`);
-        const response = await rp(`${host}/small.test`);
+        const response = await sendRequest(`${host}/small.test`);
 
         response.statusCode.should.be.equal(200);
         response.body.equals(file).should.be.true();
@@ -85,99 +83,85 @@ describe("Server tests", function() {
 
     context("otherwise when file doesn't exist", function() {
       it("should return 404 for non-existing but valid filename", async function() {
-        const response = await rp(`${host}/blablabla.test`);
+        const response = await sendRequest(`${host}/blablabla.test`);
         response.statusCode.should.be.equal(404);
       });
 
       it("Should return 400 for invalid filename", async function() {
-        const response = await rp(`${host}/blablabla..test`);
+        const response = await sendRequest(`${host}/blablabla..test`);
         response.statusCode.should.be.equal(400);
       });
     });
   });
 
-  describe("POST tests", function() {
-    it("Should not upload big file", function(done) {
-      const bigFile = new fs.ReadStream(bigFileTempPath);
+  describe("POST method", function() {
+    context("when file is already exists on server", function() {
+      beforeEach(function() {
+        fs.copySync(
+          `${config.testRoot}/fixtures/small.test`,
+          `${config.filesRoot}/small.test`
+        );
+      });
 
-      const reqOptions = {
-        url: "http://localhost:3000/" + bigFileName,
-        method: "POST"
-      };
+      it("should forbid to upload and return 409", async function() {
+        const request = sendRequest.post(`${host}/small.test`);
+        const { mtime } = fs.statSync(`${config.filesRoot}/small.test`);
 
-      bigFile.pipe(
-        request(reqOptions, function(error, response) {
-          if (error) {
-            // see this for description https://github.com/nodejs/node/issues/947#issue-58838888
-            // there is a problem in nodejs with it
-            if (error.code === "ECONNRESET" || error.code === "EPIPE") {
-              fs
-                .existsSync(config.get("filesRoot") + "/big.png")
-                .should.be.false();
-              return done();
-            } else {
-              return done(error);
-            }
-          }
+        fs
+          .createReadStream(`${config.testRoot}/fixtures/small.test`)
+          .pipe(request);
 
-          const expectedCode = 413;
-          assert.equal(response.statusCode, expectedCode);
+        const response = await request;
+        const { mtime: newMtime } = fs.statSync(
+          `${config.filesRoot}/small.test`
+        );
 
-          done();
-        })
-      );
+        response.statusCode.should.be.equal(409);
+        fs.readdirSync(`${config.filesRoot}`).length.should.be.equal(1);
+        mtime.should.eql(newMtime);
+      });
     });
 
-    it("Should upload small file correctly", function(done) {
-      const smallFile = fs.readFileSync(smallFileTempPath);
-      const fileStream = new fs.ReadStream(smallFileTempPath);
+    context("otherwise", function() {
+      it("should forbid to upload big file and return 413", async function() {
+        const request = sendRequest.post(`${host}/big.test`);
+        fs
+          .createReadStream(`${config.testRoot}/fixtures/big.test`)
+          .pipe(request);
+        let response;
 
-      const reqOptions = {
-        url: "http://localhost:3000/" + smallFileName,
-        method: "POST"
-      };
+        try {
+          response = await request;
+        } catch (err) {
+          // see ctx for description https://github.com/nodejs/node/issues/947#issue-58838888
+          // there is a problem in nodejs with it
+          if (err.cause && err.cause.code == "EPIPE") return;
 
-      fileStream.pipe(
-        request(reqOptions, function(error, response) {
-          if (error) return done(error);
+          throw err;
+        }
 
-          const expectedCode = 200;
-          const uploadedFile = fs.readFileSync(smallFileServerPath);
-          assert.equal(response.statusCode, expectedCode);
-          assert.equal(uploadedFile.toString(), smallFile.toString());
+        fs.readdirSync(config.filesRoot).should.be.empty();
+        response.statusCode.should.be.equal(413);
+      });
 
-          fs.unlinkSync(smallFileServerPath);
-          done();
-        })
-      );
-    });
+      it("should upload small file correctly with 200 OK", async function() {
+        const request = sendRequest.post(`${host}/small.test`);
+        fs
+          .createReadStream(`${config.testRoot}/fixtures/small.test`)
+          .pipe(request);
 
-    it("Should detect if file is already exists", function(done) {
-      copyTestFile(smallFileTempPath, smallFileServerPath);
-      const fileStream = new fs.ReadStream(smallFileTempPath);
+        const response = await request;
 
-      const reqOptions = {
-        url: "http://localhost:3000/" + smallFileName,
-        method: "POST"
-      };
+        response.statusCode.should.be.equal(200);
+      });
 
-      fileStream.pipe(
-        request(reqOptions, function(error, response) {
-          if (error) return done(error);
-
-          const expectedCode = 409;
-          assert.equal(response.statusCode, expectedCode);
-
-          fs.unlinkSync(smallFileServerPath);
-          done();
-        })
-      );
+      
     });
   });
 
   describe("DELETE tests", function() {
     it("Should delete if file exists", function(done) {
-      copyTestFile(smallFileTempPath, smallFileServerPath);
+      copyTestFile(smallFileTempPath, smallFileServesendRequestath);
 
       const reqOptions = {
         url: "http://localhost:3000/" + smallFileName,
@@ -189,12 +173,12 @@ describe("Server tests", function() {
 
         const expectedCode = 200;
         assert.equal(response.statusCode, expectedCode);
-        const stillExists = fs.existsSync(smallFileServerPath);
+        const stillExists = fs.existsSync(smallFileServesendRequestath);
 
         assert.isFalse(stillExists);
 
         if (stillExists) {
-          fs.unlinkSync(smallFileServerPath);
+          fs.unlinkSync(smallFileServesendRequestath);
         }
 
         done();
@@ -210,7 +194,7 @@ describe("Server tests", function() {
       request(reqOptions, function(error, response) {
         if (error) return done(error);
 
-        const exists = fs.existsSync(smallFileServerPath);
+        const exists = fs.existsSync(smallFileServesendRequestath);
         const expectedCode = 404;
         assert.isFalse(exists);
         assert.equal(response.statusCode, expectedCode);

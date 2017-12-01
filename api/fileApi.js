@@ -90,8 +90,6 @@ const receiveFile = (req, res, fileSizeLimit) => {
   const fullPath = createFullPath(req.url);
   const file = new fs.WriteStream(fullPath, { flags: "wx" });
 
-  req.pipe(file);
-
   let size = 0;
   req.on("data", chunk => {
     size += chunk.length;
@@ -110,6 +108,8 @@ const receiveFile = (req, res, fileSizeLimit) => {
       destroyFile(file, fullPath);
     }
   });
+
+  req.pipe(file);
 
   req.on("close", () => destroyFile(file, fullPath));
 
