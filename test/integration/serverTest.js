@@ -13,12 +13,14 @@ const config = require("../../config/default");
 const server = require("../../server");
 
 const host = "http://127.0.0.1:3000";
+let app;
 
 describe("Server tests", function() {
-  let app;
 
   before(function(done) {
-    checkFileSizeLimit();
+    if (config.fileSizeLimit > 1e7)
+      throw Error("Should not create very big test-files");
+      
     createSmallFile();
     createBigFile();
     app = server.listen(3000, done);
@@ -186,11 +188,6 @@ describe("Server tests", function() {
     });
   });
 });
-
-const checkFileSizeLimit = () => {
-  if (config.fileSizeLimit > 1e7)
-    throw Error("Should not create very big test-files");
-};
 
 const createSmallFile = () => {
   const fileSize = 1;
